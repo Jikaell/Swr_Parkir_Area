@@ -55,7 +55,12 @@ async function publish(topic, payload) {
     headers: { "x-api-key": ROBLOX_API_KEY, "Content-Type": "application/json" },
     body: JSON.stringify({ message: JSON.stringify(payload) }),
   });
-  if (!res.ok) throw new Error(`Publish gagal: HTTP ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    const hint = res.status === 403
+      ? ` | universe=${id} key=...${String(ROBLOX_API_KEY).slice(-4)} (cek: key harus punya Messaging Service > Publish untuk universe ini)`
+      : "";
+    throw new Error(`Publish gagal: HTTP ${res.status} ${await res.text()}${hint}`);
+  }
 }
 
 const app = express();
@@ -141,6 +146,24 @@ if (TEST_TOKEN) {
     } catch (err) {
       res.status(502).json({ ok: false, error: err.message });
     }
+  });
+}
+
+// Diagnosa: GET /debug dengan header x-test-token. Menampilkan universe & 4 karakter terakhir key yang dipakai relay.
+if (TEST_TOKEN) {
+  app.get("/debug", async (req, res) => {
+    if (!safeEqual(req.get("x-test-token") ?? "", TEST_TOKEN)) return res.sendStatus(401);
+    let universe = null;
+    try { universe = await resolveUniverseId(); } catch (err) { universe = `gagal: ${err.message}`; }
+    res.json({
+      universeId: universe,
+      universeIdDariEnv: Boolean(UNIVERSE_ID),
+      placeId: PLACE_ID || null,
+      topic: TOPIC,
+      apiKeyAkhiran: ROBLOX_API_KEY ? `...${String(ROBLOX_API_KEY).slice(-4)}` : null,
+      apiKeyPanjang: ROBLOX_API_KEY ? String(ROBLOX_API_KEY).length : 0,
+      webhookSecretTerisi: Boolean(WEBHOOK_SECRET),
+    });
   });
 }
 
